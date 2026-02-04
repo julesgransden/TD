@@ -144,20 +144,11 @@ TransformerEncoderImpl::TransformerEncoderImpl(
 torch::Tensor TransformerEncoderImpl::forward(
     torch::Tensor x, torch::Tensor src_mask) {
 
-    // Input: x [batch_size, seq_len, d_model]
-    std::cout << "  [Encoder] Input shape: [" << x.size(0) << ", "
-              << x.size(1) << ", " << x.size(2) << "]" << std::endl;
-
-    // Pass through each encoder layer
     for (int i = 0; i < num_layers_; ++i) {
         auto layer = layers_->ptr<TransformerEncoderLayerImpl>(i);
         x = layer->forward(x, src_mask);
     }
 
-    std::cout << "  [Encoder] Output shape: [" << x.size(0) << ", "
-              << x.size(1) << ", " << x.size(2) << "]" << std::endl;
-
-    // Output: [batch_size, seq_len, d_model]
     return x;
 }
 

@@ -25,33 +25,22 @@ QECDataset::QECDataset(torch::Tensor syndromes,
 QECDataset::QECDataset(const std::string& h5_path, torch::Device device)
     : device_(device) {
 
-    std::cout << "Loading dataset from: " << h5_path << std::endl;
-
     try {
-        // Open HDF5 file (read-only)
         H5::H5File file(h5_path, H5F_ACC_RDONLY);
 
-        // =========================================
         // Read syndromes dataset
-        // =========================================
         {
             H5::DataSet dataset = file.openDataSet("syndromes");
             H5::DataSpace dataspace = dataset.getSpace();
 
-            // Get dimensions
             hsize_t dims[2];
             dataspace.getSimpleExtentDims(dims);
             int64_t num_shots = static_cast<int64_t>(dims[0]);
             int64_t num_checks = static_cast<int64_t>(dims[1]);
 
-            std::cout << "  Syndromes shape: [" << num_shots << ", " << num_checks << "]" << std::endl;
-
-            // Read data into vector
             std::vector<uint8_t> buffer(num_shots * num_checks);
             dataset.read(buffer.data(), H5::PredType::NATIVE_UINT8);
 
-            // Convert to torch tensor
-            // First create as uint8, then convert to float for model
             syndromes_ = torch::from_blob(
                 buffer.data(),
                 {num_shots, num_checks},
@@ -62,31 +51,23 @@ QECDataset::QECDataset(const std::string& h5_path, torch::Device device)
             info_.num_checks = num_checks;
         }
 
-        // =========================================
         // Read logical_errors dataset
-        // =========================================
         {
             H5::DataSet dataset = file.openDataSet("logical_errors");
             H5::DataSpace dataspace = dataset.getSpace();
 
-            // Get dimensions
             hsize_t dims[2];
             dataspace.getSimpleExtentDims(dims);
             int64_t num_shots = static_cast<int64_t>(dims[0]);
             int64_t num_logicals = static_cast<int64_t>(dims[1]);
 
-            std::cout << "  Logical errors shape: [" << num_shots << ", " << num_logicals << "]" << std::endl;
-
-            // Verify consistency
             if (num_shots != info_.num_shots) {
                 throw std::runtime_error("Mismatch: syndromes and logical_errors have different num_shots");
             }
 
-            // Read data into vector
             std::vector<uint8_t> buffer(num_shots * num_logicals);
             dataset.read(buffer.data(), H5::PredType::NATIVE_UINT8);
 
-            // Convert to torch tensor
             logical_errors_ = torch::from_blob(
                 buffer.data(),
                 {num_shots, num_logicals},
@@ -96,9 +77,7 @@ QECDataset::QECDataset(const std::string& h5_path, torch::Device device)
             info_.num_logicals = num_logicals;
         }
 
-        // =========================================
         // Read attributes (optional metadata)
-        // =========================================
         try {
             if (file.attrExists("code")) {
                 H5::Attribute attr = file.openAttribute("code");
@@ -114,7 +93,6 @@ QECDataset::QECDataset(const std::string& h5_path, torch::Device device)
         }
 
         file.close();
-        std::cout << "Dataset loaded successfully!" << std::endl;
 
     } catch (H5::FileIException& e) {
         throw std::runtime_error("Failed to open HDF5 file: " + h5_path + "\n" + e.getDetailMsg());
@@ -136,16 +114,11 @@ torch::optional<size_t> QECDataset::size() const {
 
 void QECDataset::limit_samples(int64_t n) {
     if (n <= 0 || n >= info_.num_shots) {
-        return;  // No limiting needed
+        return;
     }
 
-    std::cout << "Limiting dataset from " << info_.num_shots << " to " << n << " samples" << std::endl;
-
-    // Slice tensors to first n samples
     syndromes_ = syndromes_.slice(0, 0, n).clone();
     logical_errors_ = logical_errors_.slice(0, 0, n).clone();
-
-    // Update info
     info_.num_shots = n;
 }
 
@@ -154,8 +127,6 @@ QECDataset::split(float val_ratio, bool shuffle) {
     int64_t total = info_.num_shots;
     int64_t val_size = static_cast<int64_t>(total * val_ratio);
     int64_t train_size = total - val_size;
-
-    std::cout << "Splitting dataset: " << train_size << " train, " << val_size << " validation" << std::endl;
 
     // Create indices
     std::vector<int64_t> indices(total);
@@ -200,22 +171,7 @@ QECDataset::split(float val_ratio, bool shuffle) {
 }
 
 void QECDataset::print_summary() const {
-    std::cout << "\n========================================" << std::endl;
-    std::cout << "QEC Dataset Summary" << std::endl;
-    std::cout << "========================================" << std::endl;
-    std::cout << "Code:           " << info_.code_name << std::endl;
-    std::cout << "Num shots:      " << info_.num_shots << std::endl;
-    std::cout << "Num checks:     " << info_.num_checks << std::endl;
-    std::cout << "Num logicals:   " << info_.num_logicals << std::endl;
-    std::cout << "Syndromes:      [" << syndromes_.size(0) << ", " << syndromes_.size(1) << "]" << std::endl;
-    std::cout << "Logical errors: [" << logical_errors_.size(0) << ", " << logical_errors_.size(1) << "]" << std::endl;
-    std::cout << "Device:         " << device_ << std::endl;
-
-    // Print class balance for logical errors
-    auto error_rate = logical_errors_.mean(0);
-    std::cout << "Error rates per logical qubit:" << std::endl;
-    std::cout << "  " << error_rate << std::endl;
-    std::cout << "========================================\n" << std::endl;
+    // Minimal summary - no output by default
 }
 
 // ============================================================================
@@ -289,14 +245,10 @@ int64_t DataLoader::num_batches() const {
 std::pair<std::shared_ptr<QECDataset>, std::shared_ptr<QECDataset>>
 load_and_split(const std::string& h5_path, float train_ratio, torch::Device device) {
 
-    // Load full dataset
     auto full_dataset = std::make_shared<QECDataset>(h5_path, device);
 
     int64_t total = full_dataset->size().value();
     int64_t train_size = static_cast<int64_t>(total * train_ratio);
-    int64_t val_size = total - train_size;
-
-    std::cout << "Splitting dataset: " << train_size << " train, " << val_size << " validation" << std::endl;
 
     // Create shuffled indices
     std::vector<int64_t> indices(total);

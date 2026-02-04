@@ -42,45 +42,19 @@ void SyndromeEmbeddingImpl::init_weights() {
 }
 
 torch::Tensor SyndromeEmbeddingImpl::forward(torch::Tensor syndromes) {
-    // Input: syndromes [batch_size, num_positions] - binary values {0, 1}
-
-    auto batch_size = syndromes.size(0);
     auto seq_len = syndromes.size(1);
 
-    // Debug: Print input shape
-    std::cout << "  [SyndromeEmbedding] Input shape: [" << batch_size << ", " << seq_len << "]" << std::endl;
-
-    // Reshape syndromes for linear layer: [batch_size, num_positions] → [batch_size, num_positions, 1]
-    // This allows the linear layer to process each syndrome value independently
+    // Reshape and embed syndromes
     auto x = syndromes.unsqueeze(-1).to(torch::kFloat);
-    // Shape: [batch_size, num_positions, 1]
-
-    // Apply syndrome embedding linear layer
-    // [batch_size, num_positions, 1] → [batch_size, num_positions, d_model]
     x = syndrome_embed_->forward(x);
-    std::cout << "  [SyndromeEmbedding] After syndrome_embed: [" << x.size(0) << ", "
-              << x.size(1) << ", " << x.size(2) << "]" << std::endl;
 
-    // Create position indices: [0, 1, 2, ..., num_positions-1]
+    // Add positional embeddings
     auto positions = torch::arange(seq_len, syndromes.options().dtype(torch::kLong));
-    // Shape: [num_positions]
-
-    // Get positional embeddings and add to syndrome embeddings
-    // position_embed: [num_positions] → [num_positions, d_model]
     auto pos_emb = position_embed_->forward(positions);
-    // Shape: [num_positions, d_model]
-
-    // Add positional embeddings (broadcasts over batch dimension)
-    // [batch_size, num_positions, d_model] + [num_positions, d_model]
     x = x + pos_emb;
-    std::cout << "  [SyndromeEmbedding] After position_embed: [" << x.size(0) << ", "
-              << x.size(1) << ", " << x.size(2) << "]" << std::endl;
 
     // Apply dropout
-    x = dropout_->forward(x);
-
-    // Output: [batch_size, num_positions, d_model]
-    return x;
+    return dropout_->forward(x);
 }
 
 } // namespace qec

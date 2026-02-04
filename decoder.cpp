@@ -156,25 +156,11 @@ torch::Tensor TransformerDecoderImpl::forward(
     torch::Tensor tgt_mask,
     torch::Tensor memory_mask) {
 
-    // Input:
-    //   tgt: [batch_size, tgt_len, d_model] - logical qubit queries
-    //   memory: [batch_size, src_len, d_model] - encoded syndromes
-
-    std::cout << "  [Decoder] Input tgt shape: [" << tgt.size(0) << ", "
-              << tgt.size(1) << ", " << tgt.size(2) << "]" << std::endl;
-    std::cout << "  [Decoder] Input memory shape: [" << memory.size(0) << ", "
-              << memory.size(1) << ", " << memory.size(2) << "]" << std::endl;
-
-    // Pass through each decoder layer
     for (int i = 0; i < num_layers_; ++i) {
         auto layer = layers_->ptr<TransformerDecoderLayerImpl>(i);
         tgt = layer->forward(tgt, memory, tgt_mask, memory_mask);
     }
 
-    std::cout << "  [Decoder] Output shape: [" << tgt.size(0) << ", "
-              << tgt.size(1) << ", " << tgt.size(2) << "]" << std::endl;
-
-    // Output: [batch_size, tgt_len, d_model]
     return tgt;
 }
 

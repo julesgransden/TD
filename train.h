@@ -48,18 +48,6 @@ public:
     std::pair<float, float> eval_step(torch::Tensor syndromes, torch::Tensor targets);
 
     /**
-     * @brief Generate dummy training data for testing (fallback when no HDF5)
-     * @param batch_size Number of samples
-     * @param num_checks Number of syndrome checks
-     * @param num_logical Number of logical qubits
-     * @return Pair of (syndromes, logical_errors) tensors
-     */
-    static std::pair<torch::Tensor, torch::Tensor> generate_dummy_data(
-        int batch_size,
-        int num_checks = NUM_CHECKS,
-        int num_logical = NUM_LOGICAL);
-
-    /**
      * @brief Run training loop with HDF5 data
      * @param data_loader Data loader with real training data
      * @param num_epochs Number of training epochs
@@ -70,18 +58,6 @@ public:
                     int num_epochs = NUM_EPOCHS,
                     int log_interval = LOG_INTERVAL,
                     DataLoader* val_loader = nullptr);
-
-    /**
-     * @brief Run training loop with dummy data (for testing)
-     * @param num_epochs Number of training epochs
-     * @param batch_size Batch size
-     * @param batches_per_epoch Number of batches per epoch
-     * @param log_interval Print loss every N batches
-     */
-    void train_loop_dummy(int num_epochs = NUM_EPOCHS,
-                          int batch_size = BATCH_SIZE,
-                          int batches_per_epoch = 100,
-                          int log_interval = LOG_INTERVAL);
 
     /**
      * @brief Evaluate model on entire validation set

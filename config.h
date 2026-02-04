@@ -34,9 +34,9 @@ constexpr float DROPOUT = 0.1f;        // Dropout rate
 // ============================================================================
 
 constexpr float LEARNING_RATE = 1e-4f; // Adam optimizer learning rate
-constexpr int BATCH_SIZE = 32;         // Training batch size
-constexpr int NUM_EPOCHS = 100;        // Number of training epochs
-constexpr int LOG_INTERVAL = 10;       // Print loss every N batches
+constexpr int BATCH_SIZE = 256;         // Training batch size
+constexpr int NUM_EPOCHS = 1;        // Number of training epochs
+constexpr int LOG_INTERVAL = 100;       // Print loss every N batches
 
 // ============================================================================
 // Derived Constants (do not modify)
