@@ -82,6 +82,12 @@ private:
     QECTransformer model_;
     torch::optim::Adam optimizer_;
     torch::nn::BCEWithLogitsLoss criterion_;
+
+    // Mixed precision training
+    bool use_amp_ = true;
+    float loss_scale_ = 1024.0f;   // Initial loss scale for FP16 (start lower)
+    int scale_window_ = 1000;      // Steps before increasing scale
+    int steps_since_decrease_ = 0;
 };
 
 /**

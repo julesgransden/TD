@@ -157,6 +157,11 @@ public:
      */
     std::shared_ptr<QECDataset> dataset() const { return dataset_; }
 
+    /**
+     * @brief Get the batch size
+     */
+    int batch_size() const { return batch_size_; }
+
 private:
     std::shared_ptr<QECDataset> dataset_;
     int batch_size_;

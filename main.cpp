@@ -101,6 +101,7 @@ int main(int argc, char* argv[]) {
                          NUM_ENCODER_LAYERS, NUM_DECODER_LAYERS,
                          DIM_FEEDFORWARD, DROPOUT);
     model->to(device);
+    // Train in float32 for numerical stability (float16 can cause vanishing gradients)
     model->print_summary();
 
     // Create trainer

@@ -33,7 +33,7 @@ constexpr float DROPOUT = 0.1f;        // Dropout rate
 // Training Hyperparameters
 // ============================================================================
 
-constexpr float LEARNING_RATE = 1e-4f; // Adam optimizer learning rate
+constexpr float LEARNING_RATE = 6e-4f; // Adam optimizer learning rate (increased for better convergence)
 constexpr int BATCH_SIZE = 256;         // Training batch size
 constexpr int NUM_EPOCHS = 1;        // Number of training epochs
 constexpr int LOG_INTERVAL = 100;       // Print loss every N batches

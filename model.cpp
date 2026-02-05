@@ -63,7 +63,7 @@ QECTransformerImpl::QECTransformerImpl(
 
     logical_queries_ = register_parameter(
         "logical_queries",
-        torch::randn({num_logical, d_model}) * 0.02
+        torch::randn({num_logical, d_model}) * 0.1  // Larger init for better gradient flow
     );
 
     decoder_ = register_module(

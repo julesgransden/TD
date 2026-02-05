@@ -1,3 +1,0 @@
-/home/azureuser/jules/TD/build/CMakeFiles/qec_transformer.dir
-/home/azureuser/jules/TD/build/CMakeFiles/edit_cache.dir
-/home/azureuser/jules/TD/build/CMakeFiles/rebuild_cache.dir

@@ -1,6 +1,7 @@
 #include "train.h"
 #include <iostream>
 #include <iomanip>
+#include <chrono>
 
 namespace qec {
 
@@ -15,42 +16,52 @@ Trainer::Trainer(QECTransformer model, float learning_rate)
 }
 
 float Trainer::train_step(torch::Tensor syndromes, torch::Tensor targets) {
-    // Set model to training mode
     model_->train();
-
-    // Zero gradients
     optimizer_.zero_grad();
 
-    // Forward pass
-    auto logits = model_->forward(syndromes);
+    // Forward pass in float32 for numerical stability
+    auto syndromes_fp32 = syndromes.to(torch::kFloat);
+    auto logits = model_->forward(syndromes_fp32);
 
-    // Compute loss (BCEWithLogitsLoss expects float targets)
-    auto loss = criterion_(logits, targets.to(torch::kFloat));
+    // Check for NaN/Inf (warn but don't silently replace)
+    auto nan_count = torch::isnan(logits).sum().item<int64_t>();
+    auto inf_count = torch::isinf(logits).sum().item<int64_t>();
+    if (nan_count > 0 || inf_count > 0) {
+        std::cerr << "Warning: " << nan_count << " NaN, " << inf_count << " Inf in logits" << std::endl;
+    }
+
+    auto logits_clamped = logits.clamp(-50, 50);
+    auto targets_fp32 = targets.to(torch::kFloat);
+    auto loss = criterion_(logits_clamped, targets_fp32);
+
+    float loss_val = loss.item<float>();
+
+    // Skip if loss is NaN/Inf
+    if (std::isnan(loss_val) || std::isinf(loss_val)) {
+        return loss_val;
+    }
 
     // Backward pass
     loss.backward();
 
+    // Gradient clipping for stability
+    torch::nn::utils::clip_grad_norm_(model_->parameters(), 1.0);
+
     // Update weights
     optimizer_.step();
 
-    return loss.item<float>();
+    return loss_val;
 }
 
 std::pair<float, float> Trainer::eval_step(torch::Tensor syndromes, torch::Tensor targets) {
-    // Set model to evaluation mode
     model_->eval();
-
-    // Disable gradient computation
     torch::NoGradGuard no_grad;
 
-    // Forward pass
-    auto logits = model_->forward(syndromes);
-
-    // Compute loss
-    auto loss = criterion_(logits, targets.to(torch::kFloat));
-
-    // Compute accuracy
-    float accuracy = compute_accuracy(logits, targets);
+    // Forward pass in float32
+    auto logits = model_->forward(syndromes.to(torch::kFloat));
+    auto logits_clamped = logits.clamp(-50, 50);
+    auto loss = criterion_(logits_clamped, targets.to(torch::kFloat));
+    float accuracy = compute_accuracy(logits_clamped, targets);
 
     return {loss.item<float>(), accuracy};
 }
@@ -63,11 +74,14 @@ void Trainer::train_loop(DataLoader& data_loader,
     constexpr int LOG_EVERY = 100;  // Print every 100 batches
     float best_val_acc = 0.0f;
 
+    auto total_start = std::chrono::high_resolution_clock::now();
+
     for (int epoch = 0; epoch < num_epochs; ++epoch) {
         float recent_loss = 0.0f;
         int batch_count = 0;
 
         data_loader.reset();
+        auto interval_start = std::chrono::high_resolution_clock::now();
 
         while (data_loader.has_next()) {
             auto [syndromes, targets] = data_loader.next();
@@ -77,6 +91,10 @@ void Trainer::train_loop(DataLoader& data_loader,
             batch_count++;
 
             if (batch_count % LOG_EVERY == 0) {
+                auto now = std::chrono::high_resolution_clock::now();
+                float interval_sec = std::chrono::duration<float>(now - interval_start).count();
+                float samples_per_sec = (LOG_EVERY * data_loader.batch_size()) / interval_sec;
+
                 float avg_loss = recent_loss / LOG_EVERY;
 
                 // Compute accuracy on current batch
@@ -84,7 +102,7 @@ void Trainer::train_loop(DataLoader& data_loader,
                 {
                     torch::NoGradGuard no_grad;
                     model_->eval();
-                    auto logits = model_->forward(syndromes);
+                    auto logits = model_->forward(syndromes.to(torch::kFloat));
                     acc = compute_accuracy(logits, targets);
                     model_->train();
                 }
@@ -92,9 +110,11 @@ void Trainer::train_loop(DataLoader& data_loader,
                 std::cout << "Epoch " << (epoch + 1) << " Batch " << batch_count
                           << " | Loss: " << std::fixed << std::setprecision(4) << avg_loss
                           << " | Acc: " << std::fixed << std::setprecision(2) << (acc * 100) << "%"
+                          << " | " << std::fixed << std::setprecision(0) << samples_per_sec << " samples/s"
                           << std::endl;
 
                 recent_loss = 0.0f;
+                interval_start = now;
             }
         }
 
@@ -111,8 +131,12 @@ void Trainer::train_loop(DataLoader& data_loader,
         }
     }
 
+    auto total_end = std::chrono::high_resolution_clock::now();
+    float total_sec = std::chrono::duration<float>(total_end - total_start).count();
+
     std::cout << "Training complete. Best val acc: " << std::fixed << std::setprecision(2)
-              << (best_val_acc * 100) << "%" << std::endl;
+              << (best_val_acc * 100) << "% | Total time: " << std::fixed << std::setprecision(1)
+              << total_sec << "s" << std::endl;
 }
 
 std::pair<float, float> Trainer::evaluate(DataLoader& data_loader) {
@@ -128,11 +152,12 @@ std::pair<float, float> Trainer::evaluate(DataLoader& data_loader) {
     while (data_loader.has_next()) {
         auto [syndromes, targets] = data_loader.next();
 
-        auto logits = model_->forward(syndromes);
-        auto loss = criterion_(logits, targets.to(torch::kFloat));
+        auto logits = model_->forward(syndromes.to(torch::kFloat));
+        auto logits_clamped = logits.clamp(-50, 50);
+        auto loss = criterion_(logits_clamped, targets.to(torch::kFloat));
 
         total_loss += loss.item<float>();
-        total_accuracy += compute_accuracy(logits, targets);
+        total_accuracy += compute_accuracy(logits_clamped, targets);
         batch_count++;
     }
 

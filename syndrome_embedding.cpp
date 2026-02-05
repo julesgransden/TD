@@ -43,14 +43,15 @@ void SyndromeEmbeddingImpl::init_weights() {
 
 torch::Tensor SyndromeEmbeddingImpl::forward(torch::Tensor syndromes) {
     auto seq_len = syndromes.size(1);
+    auto input_dtype = syndromes.dtype();
 
     // Reshape and embed syndromes
-    auto x = syndromes.unsqueeze(-1).to(torch::kFloat);
+    auto x = syndromes.unsqueeze(-1);
     x = syndrome_embed_->forward(x);
 
-    // Add positional embeddings
-    auto positions = torch::arange(seq_len, syndromes.options().dtype(torch::kLong));
-    auto pos_emb = position_embed_->forward(positions);
+    // Add positional embeddings (cast to match input dtype for float16 support)
+    auto positions = torch::arange(seq_len, torch::TensorOptions().dtype(torch::kLong).device(syndromes.device()));
+    auto pos_emb = position_embed_->forward(positions).to(input_dtype);
     x = x + pos_emb;
 
     // Apply dropout
